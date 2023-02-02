@@ -93,6 +93,8 @@ class DataSet():
 
     def get_extracted_sequence(self, data_type, sample):
         filename = sample[2]
+        print('Aca hay seqlength')
+        print(self.seq_length)
         path = os.path.join(self.sequence_path, filename + '-' + str(self.seq_length) + \
             '-' + data_type + '.npy')
         if os.path.isfile(path):
@@ -118,12 +120,16 @@ class DataSet():
         """Given a sample row from the data file, get all the corresponding frame
         filenames."""
         path = os.path.join('data', sample[0], sample[1])
+        print('Path donde busca frames')
+        print(path)
         filename = sample[2]
         images = sorted(glob.glob(os.path.join(path, filename + '*jpg')))
         return images
 
     @staticmethod
     def rescale_list(input_list, size):
+        print('Longitud de input list')
+        print(len(input_list))
         assert len(input_list)>= size
         skip = len(input_list) // size
         output = [input_list[i] for i in range(0, len(input_list), skip)]
@@ -147,17 +153,25 @@ model = Model(
 # Loop through data.
 pbar = tqdm(total=len(data.data))
 for video in data.data:
+    print('Video es')
+    print(video)
     # Get the path to the sequence for this video.
-    path = os.path.join('data', 'sequences', video[2] + '-' + str(seq_length) + \
+    print('En la linea 153 hay seqlength')
+    print(data.seq_length)
+    path = os.path.join('data', 'sequences', video[2] + '-' + str(data.seq_length) + \
         '-features')  # numpy will auto-append .npy
+    print('Path es: ')
+    print(path)
     # Check if we already have it.
     if os.path.isfile(path + '.npy'):
+        print('Ya existe')
         pbar.update(1)
         continue
 
     # Get the frames for this video.
     frames = data.get_frames_for_sample(video)
-    #print(frames)
+    print('Frames')
+    print(frames)
 
     # Now downsample to just the ones we need.
     frames = data.rescale_list(frames, 40)
