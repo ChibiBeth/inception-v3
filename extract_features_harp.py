@@ -128,6 +128,7 @@ class DataSet():
 
     @staticmethod
     def rescale_list(input_list, size):
+        
         print('Longitud de input list')
         print(len(input_list))
         assert len(input_list)>= size
