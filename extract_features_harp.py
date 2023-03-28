@@ -1,18 +1,16 @@
 import csv
-import numpy as np
-import random
 import glob
 import os.path
-import sys
-import operator
-import threading
-from keras.preprocessing import image as Img
+
+# from keras.preprocessing import image as Img
+import keras.utils as Img
+import numpy as np
 from keras.applications.inception_v3 import InceptionV3, preprocess_input
-from keras.models import Model, load_model
-from keras.layers import Input
+from keras.models import Model
+from keras.utils import to_categorical
 from tqdm import tqdm
 
-from keras.utils import to_categorical
+
 class DataSet():
 
     def __init__(self, seq_length=40, class_limit=None, image_shape=(224, 224, 3)):
@@ -29,7 +27,7 @@ class DataSet():
     def get_data():
         with open(os.path.join('data', 'data_file.csv'), 'r') as fin:
             reader = csv.reader(fin)
-            #print(list(reader))
+            # print(list(reader))
             data = list(reader)
             print('Retornando data para clase dataset')
             print(data)
@@ -95,8 +93,10 @@ class DataSet():
         filename = sample[2]
         print('Aca hay seqlength')
         print(self.seq_length)
+
         path = os.path.join(self.sequence_path, filename + '-' + str(self.seq_length) + \
-            '-' + data_type + '.npy')
+                            '-' + data_type + '.npy')
+        print(f'BUSCANDO PATH {path}')
         if os.path.isfile(path):
             return np.load(path)
         else:
@@ -128,16 +128,17 @@ class DataSet():
 
     @staticmethod
     def rescale_list(input_list, size):
-        
+
         print('Longitud de input list')
         print(len(input_list))
-        assert len(input_list)>= size
+        assert len(input_list) >= size
         skip = len(input_list) // size
         output = [input_list[i] for i in range(0, len(input_list), skip)]
         return output[:size]
 
+
 # Get the dataset.
-#seq_length = 40
+# seq_length = 40
 data = DataSet(seq_length=40, class_limit=3)
 print('The data is ')
 print(data.data)
@@ -160,7 +161,7 @@ for video in data.data:
     print('En la linea 153 hay seqlength')
     print(data.seq_length)
     path = os.path.join('data', 'sequences', video[2] + '-' + str(data.seq_length) + \
-        '-features')  # numpy will auto-append .npy
+                        '-features')  # numpy will auto-append .npy
     print('Path es: ')
     print(path)
     # Check if we already have it.
@@ -176,8 +177,8 @@ for video in data.data:
 
     # Now downsample to just the ones we need.
     frames = data.rescale_list(frames, 40)
-    #print(frames)
-    #extracting features and appending to build the sequence.
+    # print(frames)
+    # extracting features and appending to build the sequence.
     sequence = []
     for image in frames:
         img = Img.load_img(image, target_size=(299, 299))
