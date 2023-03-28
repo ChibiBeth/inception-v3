@@ -13,11 +13,11 @@ from tqdm import tqdm
 
 class DataSet():
 
-    def __init__(self, seq_length=40, class_limit=None, image_shape=(224, 224, 3)):
+    def __init__(self, seq_length=150, class_limit=None, image_shape=(299, 299, 3)):
         self.seq_length = seq_length
         self.class_limit = class_limit
         self.sequence_path = os.path.join('data', 'sequences')
-        self.max_frames = 300  # max number of frames a video can have for us to use it
+        self.max_frames = 150  # max number of frames a video can have for us to use it
         self.data = self.get_data()
         self.classes = self.get_classes()
         self.data = self.clean_data()
@@ -139,58 +139,63 @@ class DataSet():
 
 # Get the dataset.
 # seq_length = 40
-data = DataSet(seq_length=40, class_limit=3)
-print('The data is ')
-print(data.data)
-base_model = InceptionV3(
-    weights='imagenet',
-    include_top=True
-)
-# We'll extract features at the final pool layer.
-model = Model(
-    inputs=base_model.input,
-    outputs=base_model.get_layer('avg_pool').output
-)
+def main():
+    data = DataSet(seq_length=150, class_limit=70)
+    print('The data is ')
+    print(data.data)
+    base_model = InceptionV3(
+        weights='imagenet',
+        include_top=True
+    )
+    # We'll extract features at the final pool layer.
+    model = Model(
+        inputs=base_model.input,
+        outputs=base_model.get_layer('avg_pool').output
+    )
 
-# Loop through data.
-pbar = tqdm(total=len(data.data))
-for video in data.data:
-    print('Video es')
-    print(video)
-    # Get the path to the sequence for this video.
-    print('En la linea 153 hay seqlength')
-    print(data.seq_length)
-    path = os.path.join('data', 'sequences', video[2] + '-' + str(data.seq_length) + \
-                        '-features')  # numpy will auto-append .npy
-    print('Path es: ')
-    print(path)
-    # Check if we already have it.
-    if os.path.isfile(path + '.npy'):
-        print('Ya existe')
+    # Loop through data.
+    pbar = tqdm(total=len(data.data))
+    for video in data.data:
+        print('Video es')
+        print(video)
+        # Get the path to the sequence for this video.
+        print('En la linea 153 hay seqlength')
+        print(data.seq_length)
+        path = os.path.join('data', 'sequences', video[2] + '-' + str(data.seq_length) + \
+                            '-features')  # numpy will auto-append .npy
+        print('Path es: ')
+        print(path)
+        # Check if we already have it.
+        if os.path.isfile(path + '.npy'):
+            print('Ya existe')
+            pbar.update(1)
+            continue
+
+        # Get the frames for this video.
+        frames = data.get_frames_for_sample(video)
+        print('Frames')
+        print(frames)
+
+        # Now downsample to just the ones we need.
+        frames = data.rescale_list(frames, data.seq_length)
+        # print(frames)
+        # extracting features and appending to build the sequence.
+        sequence = []
+        for image in frames:
+            img = Img.load_img(image, target_size=(299, 299))
+            x = Img.img_to_array(img)
+            x = np.expand_dims(x, axis=0)
+            x = preprocess_input(x)
+            features = model.predict(x)
+            sequence.append(features[0])
+
+        # Save the sequence.
+        np.save(path, sequence)
+
         pbar.update(1)
-        continue
 
-    # Get the frames for this video.
-    frames = data.get_frames_for_sample(video)
-    print('Frames')
-    print(frames)
+    pbar.close()
 
-    # Now downsample to just the ones we need.
-    frames = data.rescale_list(frames, 40)
-    # print(frames)
-    # extracting features and appending to build the sequence.
-    sequence = []
-    for image in frames:
-        img = Img.load_img(image, target_size=(299, 299))
-        x = Img.img_to_array(img)
-        x = np.expand_dims(x, axis=0)
-        x = preprocess_input(x)
-        features = model.predict(x)
-        sequence.append(features[0])
 
-    # Save the sequence.
-    np.save(path, sequence)
-
-    pbar.update(1)
-
-pbar.close()
+if __name__ == '__main__':
+    main()

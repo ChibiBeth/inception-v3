@@ -1,11 +1,8 @@
 import glob
 import os.path
-import csv
-from builtins import set
-import mediapipe as mp
 
 import cv2
-import keras.utils as Img
+import mediapipe as mp
 import numpy as np
 from keras.applications.inception_v3 import InceptionV3, preprocess_input
 from keras.models import Model, load_model
@@ -38,7 +35,7 @@ inception_model = Model(
     outputs=base_model.get_layer('avg_pool').output
 )
 sequence = []
-image_name = 'marzo_test.avi'
+image_name = 'soltero_betha_1.mp4'
 cap = cv2.VideoCapture(image_name)
 currentframe = 0
 with mp_hands.Hands(min_detection_confidence=0.6, min_tracking_confidence=0.4) as hands:
@@ -46,9 +43,9 @@ with mp_hands.Hands(min_detection_confidence=0.6, min_tracking_confidence=0.4) a
     total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
     print(f'Total Frames: {total_frames}')
     for frame_num in range(total_frames):
-        print(frame_num)
+        # print(frame_num)
         ret, frame = cap.read()
-        cv2.imshow('frame', frame)
+        # cv2.imshow('frame', frame)
         if not ret:
             print("Ignoring empty camera frame.")
             # If loading a video, use 'break' instead of 'continue'.
@@ -78,10 +75,11 @@ with mp_hands.Hands(min_detection_confidence=0.6, min_tracking_confidence=0.4) a
         # Detections
 
         # Rendering results
-        print(f'Results: \n {results.multi_hand_landmarks}')
+        # print(f'Results: \n {results.multi_hand_landmarks}')
 
         if results.multi_hand_landmarks:
-            print(f'Hay resultados')
+            # print(f'Hay resultados')
+            nb_frames += 1
             for num, hand in enumerate(results.multi_hand_landmarks):
                 mp_drawing.draw_landmarks(image, hand, mp_hands.HAND_CONNECTIONS,
                                           mp_drawing.DrawingSpec(color=(255, 255, 255), thickness=1,
@@ -89,24 +87,31 @@ with mp_hands.Hands(min_detection_confidence=0.6, min_tracking_confidence=0.4) a
                                           mp_drawing.DrawingSpec(color=(255, 255, 255), thickness=1,
                                                                  circle_radius=1),
                                           )
-            img = Img.load_img(image, target_size=(299, 299))
-            x = Img.img_to_array(img)
-            x = np.expand_dims(x, axis=0)
+            if nb_frames <= 150:
+                x = np.expand_dims(image, axis=0)
+                x = preprocess_input(x)
+                features = inception_model.predict(x, verbose=0)
+                sequence.append(features[0])
+            else:
+                break
+
+            print(nb_frames)
+
+    if nb_frames < 150:
+        for i in range(nb_frames + 1, 151, 1):
+            x = np.expand_dims(image, axis=0)
             x = preprocess_input(x)
             features = inception_model.predict(x, verbose=0)
             sequence.append(features[0])
+            # cv2.imshow('frame', frame)
 
-            sequence = np.array([sequence])
-            prediction = model.predict(sequence)
-            maxm = prediction[0][0]
-            maxid = 0
-            for i in range(len(prediction[0])):
-                if (maxm < prediction[0][i]):
-                    maxm = prediction[0][i]
-                    maxid = i
+sequence = np.array([sequence])
+prediction = model.predict(sequence)
+maxm = prediction[0][0]
+maxid = 0
+for i in range(len(prediction[0])):
+    if (maxm < prediction[0][i]):
+        maxm = prediction[0][i]
+        maxid = i
 
-            cv2.putText(image, f"Class: {classes[maxid]}", (50, 50), cv2.FONT_HERSHEY_SIMPLEX, 1,
-                        (255, 0, 0), 2, cv2.LINE_AA)
-
-            print(image_name, ' ------- ', classes[maxid])
-            cv2.imshow('frame', image)
+print(image_name, ' ------- ', classes[maxid])

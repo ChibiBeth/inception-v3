@@ -110,7 +110,7 @@ def hands_extraction(vid_dir, out_dir, resize=(299, 299)):
 
                         # Rendering results
                         if results.multi_hand_landmarks:
-                            print(results.multi_hand_landmarks)
+                            # print(results.multi_hand_landmarks)
                             for num, hand in enumerate(results.multi_hand_landmarks):
                                 mp_drawing.draw_landmarks(img, hand, mp_hands.HAND_CONNECTIONS,
                                                           mp_drawing.DrawingSpec(color=(255, 255, 255), thickness=1,
@@ -118,22 +118,25 @@ def hands_extraction(vid_dir, out_dir, resize=(299, 299)):
                                                           mp_drawing.DrawingSpec(color=(255, 255, 255), thickness=1,
                                                                                  circle_radius=1),
                                                           )
+                            # print(img.shape)
                             # se escribe cada frame en el directorio de salida que le corresponda a su clase
-                            cv2.imwrite(os.path.join(out_dir, train_or_test, classname,
-                                                     '{}-{}.jpg'.format(filename_no_ext, str.rjust(str(i), 4, '0'))),
-                                        img)
-                            nb_frames = i
-                        else:
-                            i -= 1
-
-                if cv2.waitKey(10) & 0xFF == ord('q'):
-                    break
+                            nb_frames += 1
+                            print(nb_frames)
+                            if nb_frames <= 150:
+                                cv2.imwrite(os.path.join(out_dir, train_or_test, classname,
+                                                         '{}-{}.jpg'.format(filename_no_ext,
+                                                                            str.rjust(str(nb_frames), 4, '0'))),
+                                            img)
+                            else:
+                                nb_frames -= 1
+                                break
                 # se guardan los datos relevantes de cada video procesado
-                if nb_frames < 40:
-                    for i in range(nb_frames, 42, 1):
+                if nb_frames < 150:
+                    for i in range(nb_frames + 1, 151, 1):
                         cv2.imwrite(os.path.join(out_dir, train_or_test, classname,
-                                                 '{}_{}.jpg'.format(filename_no_ext, str.rjust(str(i), 4, '0'))), img)
-                    nb_frames = 41
+                                                 '{}_{}.jpg'.format(filename_no_ext,
+                                                                    str.rjust(str(i), 4, '0'))), img)
+                    nb_frames = 150
 
                 data_file.append([train_or_test, classname, filename_no_ext, nb_frames])
 
