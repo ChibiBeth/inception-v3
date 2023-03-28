@@ -5,6 +5,7 @@ import cv2
 import mediapipe as mp
 import numpy as np
 from keras.applications.inception_v3 import InceptionV3, preprocess_input
+from keras.layers import LSTM, Dense, Dropout, Flatten, TimeDistributed
 from keras.models import Model, load_model
 
 seq_lenght = 40
@@ -27,15 +28,21 @@ classes = sorted(classes)
 
 base_model = InceptionV3(
     weights='imagenet',
-    include_top=True
+    include_top=False,
+    input_shape=(299, 299, 3)
 )
+
+x = base_model.output
+x = Flatten()(x)
+predictions = Dense(70, activation='softmax')(x)
+
 # We'll extract features at the final pool layer.
 inception_model = Model(
     inputs=base_model.input,
-    outputs=base_model.get_layer('avg_pool').output
+    outputs=predictions
 )
 sequence = []
-image_name = 'soltero_betha_1.mp4'
+image_name = 'SOLTERO.mp4'
 cap = cv2.VideoCapture(image_name)
 currentframe = 0
 with mp_hands.Hands(min_detection_confidence=0.6, min_tracking_confidence=0.4) as hands:

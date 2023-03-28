@@ -21,7 +21,7 @@ checkpointer = ModelCheckpoint(
 tb = TensorBoard(log_dir=os.path.join('data', 'logs', 'lstm'))
 
 # Helper: Stop when we stop learning.
-early_stopper = EarlyStopping(patience=10)
+early_stopper = EarlyStopping(patience=30)
 
 # Helper: Save results.
 timestamp = time.time()
@@ -39,8 +39,12 @@ X, y = data.get_all_sequences_in_memory('train', 'features')
 X_test, y_test = data.get_all_sequences_in_memory('test', 'features')
 
 model = Sequential()
-model.add(LSTM(2048, return_sequences=False, input_shape=(150, 2048), dropout=0.5))
+model.add(LSTM(2048, return_sequences=True, input_shape=(150, 70), dropout=0.5))
 model.add(Dense(512, activation='relu'))
+model.add(Dropout(0.5))
+model.add(LSTM(256, return_sequences=True))
+model.add(Dropout(0.5))
+model.add(LSTM(128, return_sequences=False))
 model.add(Dropout(0.5))
 model.add(Dense(len(data.classes), activation='softmax'))
 optimizer = Adam(learning_rate=1e-5, decay=1e-6)

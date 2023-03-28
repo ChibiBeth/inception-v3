@@ -8,6 +8,7 @@ import numpy as np
 from keras.applications.inception_v3 import InceptionV3, preprocess_input
 from keras.models import Model
 from keras.utils import to_categorical
+from keras.layers import LSTM, Dense, Dropout, Flatten, TimeDistributed
 from tqdm import tqdm
 
 
@@ -145,12 +146,19 @@ def main():
     print(data.data)
     base_model = InceptionV3(
         weights='imagenet',
-        include_top=True
+        include_top=False,
+        input_shape=(299, 299, 3)
     )
+
+    x = base_model.output
+    x = Flatten()(x)
+    print(x)
+    predictions = Dense(70, activation='softmax')(x)
+
     # We'll extract features at the final pool layer.
     model = Model(
         inputs=base_model.input,
-        outputs=base_model.get_layer('avg_pool').output
+        outputs=predictions
     )
 
     # Loop through data.
