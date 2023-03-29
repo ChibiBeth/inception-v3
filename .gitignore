@@ -4,7 +4,10 @@ screens/
 testing_videos/
 tf_files/
 training_dataset/
-abajo.mp4
-abrazar.mp4
-recognized.avi
-semana_ever.mp4
+*.avi
+*.mp4
+data/
+raw_data/
+.idea/
+__pycache__/
+lstm_senha_model/

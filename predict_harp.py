@@ -34,7 +34,7 @@ base_model = InceptionV3(
 
 x = base_model.output
 x = Flatten()(x)
-predictions = Dense(70, activation='softmax')(x)
+predictions = Dense(2, activation='softmax')(x)
 
 # We'll extract features at the final pool layer.
 inception_model = Model(
@@ -52,7 +52,7 @@ with mp_hands.Hands(min_detection_confidence=0.6, min_tracking_confidence=0.4) a
     for frame_num in range(total_frames):
         # print(frame_num)
         ret, frame = cap.read()
-        # cv2.imshow('frame', frame)
+        # cv2.imshow('ventana1', frame)
         if not ret:
             print("Ignoring empty camera frame.")
             # If loading a video, use 'break' instead of 'continue'.
@@ -83,7 +83,8 @@ with mp_hands.Hands(min_detection_confidence=0.6, min_tracking_confidence=0.4) a
 
         # Rendering results
         # print(f'Results: \n {results.multi_hand_landmarks}')
-
+        class_name = ""
+        probability = 0.0
         if results.multi_hand_landmarks:
             # print(f'Hay resultados')
             nb_frames += 1
@@ -99,10 +100,24 @@ with mp_hands.Hands(min_detection_confidence=0.6, min_tracking_confidence=0.4) a
                 x = preprocess_input(x)
                 features = inception_model.predict(x, verbose=0)
                 sequence.append(features[0])
+                print(f"clases: {classes}")
+                predicted_class = np.argmax(features)
+                print(f"predicted_class: {predicted_class}")
+                probability = features[0][predicted_class]
+                print(f"probability: {probability:.2f}")
+                class_name = classes[predicted_class]
+                print(f"class_name: {class_name}")
+
             else:
                 break
 
             print(nb_frames)
+
+        text = f"{class_name}: {probability:.2f}"
+        cv2.putText(frame, text, (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 255, 0), 2)
+
+        # cv2.imshow('Solucion', frame)
+
 
     if nb_frames < 150:
         for i in range(nb_frames + 1, 151, 1):
@@ -110,15 +125,9 @@ with mp_hands.Hands(min_detection_confidence=0.6, min_tracking_confidence=0.4) a
             x = preprocess_input(x)
             features = inception_model.predict(x, verbose=0)
             sequence.append(features[0])
-            # cv2.imshow('frame', frame)
 
 sequence = np.array([sequence])
 prediction = model.predict(sequence)
-maxm = prediction[0][0]
-maxid = 0
-for i in range(len(prediction[0])):
-    if (maxm < prediction[0][i]):
-        maxm = prediction[0][i]
-        maxid = i
+maxid = np.argmax(prediction)
 
 print(image_name, ' ------- ', classes[maxid])

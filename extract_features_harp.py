@@ -141,7 +141,7 @@ class DataSet():
 # Get the dataset.
 # seq_length = 40
 def main():
-    data = DataSet(seq_length=150, class_limit=70)
+    data = DataSet(seq_length=150, class_limit=2)
     print('The data is ')
     print(data.data)
     base_model = InceptionV3(
@@ -153,7 +153,7 @@ def main():
     x = base_model.output
     x = Flatten()(x)
     print(x)
-    predictions = Dense(70, activation='softmax')(x)
+    predictions = Dense(2, activation='softmax')(x)
 
     # We'll extract features at the final pool layer.
     model = Model(
