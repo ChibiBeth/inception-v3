@@ -11,3 +11,4 @@ raw_data/
 .idea/
 __pycache__/
 lstm_senha_model/
+*.jpg
