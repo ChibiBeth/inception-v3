@@ -12,3 +12,6 @@ raw_data/
 __pycache__/
 lstm_senha_model/
 *.jpg
+*.csv
+*.zip
+

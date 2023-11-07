@@ -26,6 +26,12 @@ raw_data
 │        │   file021.mp4
 │        │   file022.mp4
 ```
+### Data Augmentation
+
+Run the script data_augmentation.py specifying the input and output directory, and max clips per video as below:
+```commandline
+python data_augmentation.py --main-folder rawdata/train/broma  --output-folder rawdata/trainaug/broma --max-clips 5
+```
 
 ### PreProcessing
 

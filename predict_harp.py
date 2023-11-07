@@ -34,7 +34,7 @@ base_model = InceptionV3(
 
 x = base_model.output
 x = Flatten()(x)
-predictions = Dense(2, activation='softmax')(x)
+predictions = Dense(10, activation='softmax')(x)
 
 # We'll extract features at the final pool layer.
 inception_model = Model(
@@ -42,7 +42,7 @@ inception_model = Model(
     outputs=predictions
 )
 sequence = []
-image_name = 'SOLTERO.mp4'
+image_name = 'ROJO.mp4'
 cap = cv2.VideoCapture(image_name)
 currentframe = 0
 with mp_hands.Hands(min_detection_confidence=0.6, min_tracking_confidence=0.4) as hands:
@@ -128,6 +128,7 @@ with mp_hands.Hands(min_detection_confidence=0.6, min_tracking_confidence=0.4) a
 
 sequence = np.array([sequence])
 prediction = model.predict(sequence)
+print(prediction)
 maxid = np.argmax(prediction)
 
 print(image_name, ' ------- ', classes[maxid])

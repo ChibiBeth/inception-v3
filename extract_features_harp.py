@@ -141,7 +141,7 @@ class DataSet():
 # Get the dataset.
 # seq_length = 40
 def main():
-    data = DataSet(seq_length=150, class_limit=2)
+    data = DataSet(seq_length=150, class_limit=10)
     print('The data is ')
     print(data.data)
     base_model = InceptionV3(
@@ -153,7 +153,7 @@ def main():
     x = base_model.output
     x = Flatten()(x)
     print(x)
-    predictions = Dense(2, activation='softmax')(x)
+    predictions = Dense(data.class_limit, activation='softmax')(x)
 
     # We'll extract features at the final pool layer.
     model = Model(
@@ -167,7 +167,6 @@ def main():
         print('Video es')
         print(video)
         # Get the path to the sequence for this video.
-        print('En la linea 153 hay seqlength')
         print(data.seq_length)
         path = os.path.join('data', 'sequences', video[2] + '-' + str(data.seq_length) + \
                             '-features')  # numpy will auto-append .npy
