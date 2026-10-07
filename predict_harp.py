@@ -1,134 +1,54 @@
+import argparse
 import glob
 import os.path
 
-import cv2
-import mediapipe as mp
 import numpy as np
-from keras.applications.inception_v3 import InceptionV3, preprocess_input
-from keras.layers import LSTM, Dense, Dropout, Flatten, TimeDistributed
-from keras.models import Model, load_model
+from keras.models import load_model
 
-seq_lenght = 40
+from extract_features_harp import build_extractor, canvases_to_rgb, extract_features
+from handtrack import process_video
+from lspy_common import load_meta
 
-mp_drawing = mp.solutions.drawing_utils
-mp_hands = mp.solutions.hands
+parser = argparse.ArgumentParser(description='Predice la seña de un video con la LSTM entrenada.')
+parser.add_argument('video', help='Ruta del video (por ejemplo ROJO.mp4)')
+parser.add_argument('--model', default='lstm_senha_model')
+parser.add_argument('--top', type=int, default=3, help='Cantidad de señas más probables a mostrar')
+args = parser.parse_args()
 
+model = load_model(args.model)
+meta = load_meta(args.model)
+if meta is not None:
+    classes = meta['classes']
+    data_type = meta['data_type']
+    seq_length = meta['seq_length']
+else:
+    # Modelos entrenados antes de guardar el .json: se deducen de data/train
+    print('[aviso] No se encontró %s.json; se usan las carpetas de data/train y features2048.' % args.model)
+    classes = sorted(os.path.basename(c) for c in glob.glob(os.path.join('data', 'train', '*')))
+    data_type, seq_length = 'features2048', 150
 
-def rescale_list(input_list, size):
-    assert len(input_list) >= size
-    skip = len(input_list) // size
-    output = [input_list[i] for i in range(0, len(input_list), skip)]
-    return output[:size]
+# Same steps as handtrack.py + extract_features_harp.py (+ retrain_inception.py)
+info = process_video(args.video, seq_length)
+if info['total_frames'] == 0:
+    raise SystemExit('No se pudo leer el video %s' % args.video)
+print('Fotogramas del video: %d; con manos en la secuencia: %d de %d'
+      % (info['total_frames'], info['with_hand'], seq_length))
 
+if data_type == 'landmarks':
+    sequence = info['landmarks']
+elif data_type in ('features2048', 'probs'):
+    sequence = extract_features(build_extractor(), canvases_to_rgb(info['canvases']))
+    if data_type == 'probs':
+        head = load_model(os.path.join('data', 'inception_head.keras'))
+        sequence = head.predict(sequence, verbose=0)
+        frame_votes = sequence.argmax(1)
+        print('Seña más probable por fotograma según Inception V3 (reentrenada): %s'
+              % classes[np.bincount(frame_votes, minlength=len(classes)).argmax()])
+else:
+    raise SystemExit("La representación '%s' no se puede reproducir en la predicción." % data_type)
 
-model = load_model("lstm_senha_model")
-classes = glob.glob(os.path.join('data', 'train', '*'))
-classes = [classes[i].split('/')[2] for i in range(len(classes))]
-classes = sorted(classes)
+prediction = model.predict(sequence[np.newaxis], verbose=0)[0]
+for i in np.argsort(prediction)[::-1][:args.top]:
+    print('%-12s %.3f' % (classes[i], prediction[i]))
 
-base_model = InceptionV3(
-    weights='imagenet',
-    include_top=False,
-    input_shape=(299, 299, 3)
-)
-
-x = base_model.output
-x = Flatten()(x)
-predictions = Dense(10, activation='softmax')(x)
-
-# We'll extract features at the final pool layer.
-inception_model = Model(
-    inputs=base_model.input,
-    outputs=predictions
-)
-sequence = []
-image_name = 'ROJO.mp4'
-cap = cv2.VideoCapture(image_name)
-currentframe = 0
-with mp_hands.Hands(min_detection_confidence=0.6, min_tracking_confidence=0.4) as hands:
-    nb_frames = 0
-    total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
-    print(f'Total Frames: {total_frames}')
-    for frame_num in range(total_frames):
-        # print(frame_num)
-        ret, frame = cap.read()
-        # cv2.imshow('ventana1', frame)
-        if not ret:
-            print("Ignoring empty camera frame.")
-            # If loading a video, use 'break' instead of 'continue'.
-            break
-        frame = cv2.resize(frame, (299, 299))
-
-        # BGR 2 RGB
-        image = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
-
-        # Flip on horizontal
-        image = cv2.flip(image, 1)
-
-        # Set flag
-        image.flags.writeable = False
-
-        # Detections
-        results = hands.process(image)
-
-        # Set flag to true
-        image.flags.writeable = True
-
-        # FONDO NEGRO
-        color = (0, 0, 0)
-        # IMAGEN DE 860x720 x3 canales
-        image = np.full((299, 299, 3), color, np.uint8)
-
-        # Detections
-
-        # Rendering results
-        # print(f'Results: \n {results.multi_hand_landmarks}')
-        class_name = ""
-        probability = 0.0
-        if results.multi_hand_landmarks:
-            # print(f'Hay resultados')
-            nb_frames += 1
-            for num, hand in enumerate(results.multi_hand_landmarks):
-                mp_drawing.draw_landmarks(image, hand, mp_hands.HAND_CONNECTIONS,
-                                          mp_drawing.DrawingSpec(color=(255, 255, 255), thickness=1,
-                                                                 circle_radius=1),
-                                          mp_drawing.DrawingSpec(color=(255, 255, 255), thickness=1,
-                                                                 circle_radius=1),
-                                          )
-            if nb_frames <= 150:
-                x = np.expand_dims(image, axis=0)
-                x = preprocess_input(x)
-                features = inception_model.predict(x, verbose=0)
-                sequence.append(features[0])
-                print(f"clases: {classes}")
-                predicted_class = np.argmax(features)
-                print(f"predicted_class: {predicted_class}")
-                probability = features[0][predicted_class]
-                print(f"probability: {probability:.2f}")
-                class_name = classes[predicted_class]
-                print(f"class_name: {class_name}")
-
-            else:
-                break
-
-            print(nb_frames)
-
-        text = f"{class_name}: {probability:.2f}"
-        cv2.putText(frame, text, (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 255, 0), 2)
-
-        # cv2.imshow('Solucion', frame)
-
-
-    if nb_frames < 150:
-        for i in range(nb_frames + 1, 151, 1):
-            x = np.expand_dims(image, axis=0)
-            x = preprocess_input(x)
-            features = inception_model.predict(x, verbose=0)
-            sequence.append(features[0])
-
-sequence = np.array([sequence])
-prediction = model.predict(sequence)
-print(prediction)
-maxid = np.argmax(prediction)
-
-print(image_name, ' ------- ', classes[maxid])
+print(args.video, ' ------- ', classes[int(np.argmax(prediction))])

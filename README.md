@@ -28,31 +28,38 @@ raw_data
 ```
 ### Data Augmentation
 
-Run the script data_augmentation.py specifying the input and output directory, and max clips per video as below:
+Generates copies of each original training video with random rotation, zoom and frame dropping (add `--espejo` to also mirror even copies). It is reproducible (`--semilla`), logs every copy's parameters and never deletes the output folder:
 ```commandline
-python data_augmentation.py --main-folder rawdata/train/broma  --output-folder rawdata/trainaug/broma --max-clips 5
+python data_augmentation.py --main-folder-path rawdata/train --output-folder-path rawdata_aug/train --max-clips 4 --espejo --copiar-originales
 ```
 
 ### PreProcessing
 
-Run the script handtrack.py specifying the input and output directory as below:
+Detects the hands with MediaPipe on the full (undistorted) frames and resamples each video to a fixed number of frames. It saves the hand drawings and the landmark coordinates:
 ```commandline
-python handtrack.py -i raw_data -o data
+python handtrack.py -i rawdata_aug -o data
 ```
-### Retreaining and generating INCEPTION V3 model sequences
-Run the script extract_features_harp.py
+### Generating INCEPTION V3 feature sequences
+Extracts 2048 ImageNet features per frame (global average pooling):
 ```commandline
 python extract_features_harp.py
 ```
-### Training the RNN Model
-Run the script train_lstm_harp.py
+### Retraining the last layer of INCEPTION V3 (optional)
+Trains a new softmax layer on top of the frozen Inception V3 features, giving a per-frame probability for each sign:
 ```commandline
-python train_lstm_harp.py
+python retrain_inception.py
+```
+### Training the RNN Model
+```commandline
+python train_lstm_harp.py                                       # --data-type features2048 | probs | landmarks, --arch ligera | original
 ```
 ### Test the predict process
-You can run a test of prediction using the script predict_harp.py
 ```commandline
-python predict_harp.py
+python predict_harp.py ROJO.mp4
+```
+### Metrics
+```commandline
+python evaluate_metrics.py --model lstm_senha_model --raw-dir rawdata_aug --signers-csv personas_video.csv
 ```
 
-
+Full documentation (in Spanish) is in [docs/](docs/README.md).
