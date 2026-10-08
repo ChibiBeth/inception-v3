@@ -1,25 +1,24 @@
+import argparse
 import csv
-import numpy as np
-import random
 import glob
 import os.path
-import sys
-import operator
-import threading
-from keras.preprocessing import image as Img
-from keras.applications.inception_v3 import InceptionV3, preprocess_input
-from keras.models import Model, load_model
-from keras.layers import Input
+
+import cv2
+import numpy as np
+from keras.utils import to_categorical
 from tqdm import tqdm
 
-from keras.utils import to_categorical
+from lspy_common import frame_pattern, sequence_file, set_seed
+
+
 class DataSet():
 
-    def __init__(self, seq_length=40, class_limit=None, image_shape=(224, 224, 3)):
+    def __init__(self, seq_length=150, class_limit=None, image_shape=(299, 299, 3), max_frames=None, classes=None):
         self.seq_length = seq_length
         self.class_limit = class_limit
+        self.only_classes = classes  # subconjunto de señas a usar (None = todas, según class_limit)
         self.sequence_path = os.path.join('data', 'sequences')
-        self.max_frames = 300  # max number of frames a video can have for us to use it
+        self.max_frames = max_frames  # máximo de fotogramas por video (None = sin límite)
         self.data = self.get_data()
         self.classes = self.get_classes()
         self.data = self.clean_data()
@@ -29,18 +28,14 @@ class DataSet():
     def get_data():
         with open(os.path.join('data', 'data_file.csv'), 'r') as fin:
             reader = csv.reader(fin)
-            #print(list(reader))
-            data = list(reader)
-            print('Retornando data para clase dataset')
-            print(data)
+            data = [row for row in reader if len(row) >= 4]
         return data
 
     def clean_data(self):
         data_clean = []
-        print('Data antes del clean')
-        print(self.data)
         for item in self.data:
-            if int(item[3]) >= self.seq_length and int(item[3]) <= self.max_frames \
+            if int(item[3]) >= self.seq_length \
+                    and (self.max_frames is None or int(item[3]) <= self.max_frames) \
                     and item[1] in self.classes:
                 data_clean.append(item)
 
@@ -52,6 +47,11 @@ class DataSet():
             if item[1] not in classes:
                 classes.append(item[1])
         classes = sorted(classes)
+        if self.only_classes:
+            missing = set(self.only_classes) - set(classes)
+            if missing:
+                raise ValueError('Clases inexistentes en data_file.csv: %s' % sorted(missing))
+            return sorted(self.only_classes)
         if self.class_limit is not None:
             return classes[:self.class_limit]
         else:
@@ -78,25 +78,25 @@ class DataSet():
     def get_all_sequences_in_memory(self, train_test, data_type):
         train, test = self.split_train_test()
         data = train if train_test == 'train' else test
-
         print("Loading %d samples into memory for %sing." % (len(data), train_test))
+        return self.load_rows(data, data_type)
 
+    def load_rows(self, rows, data_type):
         X, y = [], []
-        for row in data:
+        for row in rows:
             sequence = self.get_extracted_sequence(data_type, row)
             if sequence is None:
-                print("Can't find sequence. Did you generate them?")
-                raise
+                raise FileNotFoundError("Can't find sequence %s. Did you generate them?"
+                                        % self.sequence_file(row, data_type))
             X.append(sequence)
             y.append(self.get_class_one_hot(row[1]))
         return np.array(X), np.array(y)
 
+    def sequence_file(self, sample, data_type):
+        return sequence_file('data', sample[0], sample[2], self.seq_length, data_type)
+
     def get_extracted_sequence(self, data_type, sample):
-        filename = sample[2]
-        print('Aca hay seqlength')
-        print(self.seq_length)
-        path = os.path.join(self.sequence_path, filename + '-' + str(self.seq_length) + \
-            '-' + data_type + '.npy')
+        path = self.sequence_file(sample, data_type)
         if os.path.isfile(path):
             return np.load(path)
         else:
@@ -118,78 +118,86 @@ class DataSet():
     @staticmethod
     def get_frames_for_sample(sample):
         """Given a sample row from the data file, get all the corresponding frame
-        filenames."""
+        filenames (only this video's frames, not those of its augmented copies)."""
         path = os.path.join('data', sample[0], sample[1])
-        print('Path donde busca frames')
-        print(path)
-        filename = sample[2]
-        images = sorted(glob.glob(os.path.join(path, filename + '*jpg')))
+        # '-' (fotogramas) se ordena antes que '_' (relleno de la versión anterior)
+        images = sorted(glob.glob(os.path.join(path, frame_pattern(sample[2]))))
         return images
 
     @staticmethod
     def rescale_list(input_list, size):
-        
-        print('Longitud de input list')
-        print(len(input_list))
-        assert len(input_list)>= size
-        skip = len(input_list) // size
-        output = [input_list[i] for i in range(0, len(input_list), skip)]
-        return output[:size]
+        """Elige `size` elementos equiespaciados de toda la lista."""
+        assert len(input_list) >= size
+        idx = np.linspace(0, len(input_list) - 1, num=size).round().astype(int)
+        return [input_list[i] for i in idx]
 
-# Get the dataset.
-#seq_length = 40
-data = DataSet(seq_length=40, class_limit=3)
-print('The data is ')
-print(data.data)
-base_model = InceptionV3(
-    weights='imagenet',
-    include_top=True
-)
-# We'll extract features at the final pool layer.
-model = Model(
-    inputs=base_model.input,
-    outputs=base_model.get_layer('avg_pool').output
-)
 
-# Loop through data.
-pbar = tqdm(total=len(data.data))
-for video in data.data:
-    print('Video es')
-    print(video)
-    # Get the path to the sequence for this video.
-    print('En la linea 153 hay seqlength')
-    print(data.seq_length)
-    path = os.path.join('data', 'sequences', video[2] + '-' + str(data.seq_length) + \
-        '-features')  # numpy will auto-append .npy
-    print('Path es: ')
-    print(path)
-    # Check if we already have it.
-    if os.path.isfile(path + '.npy'):
-        print('Ya existe')
-        pbar.update(1)
-        continue
+def build_extractor():
+    """Inception V3 preentrenada en ImageNet, sin la capa de clasificación y con
+    promedio global: 2048 características por imagen. No tiene pesos aleatorios,
+    por lo que entrenamiento y predicción producen exactamente los mismos
+    vectores (H1)."""
+    from keras.applications.inception_v3 import InceptionV3
+    return InceptionV3(weights='imagenet', include_top=False, pooling='avg', input_shape=(299, 299, 3))
 
-    # Get the frames for this video.
-    frames = data.get_frames_for_sample(video)
-    print('Frames')
-    print(frames)
 
-    # Now downsample to just the ones we need.
-    frames = data.rescale_list(frames, 40)
-    #print(frames)
-    #extracting features and appending to build the sequence.
-    sequence = []
-    for image in frames:
-        img = Img.load_img(image, target_size=(299, 299))
-        x = Img.img_to_array(img)
-        x = np.expand_dims(x, axis=0)
-        x = preprocess_input(x)
-        features = model.predict(x)
-        sequence.append(features[0])
+def load_frames(paths):
+    """Lee los .jpg de un video como arreglo RGB (n, 299, 299, 3)."""
+    return np.stack([cv2.cvtColor(cv2.resize(cv2.imread(p), (299, 299)), cv2.COLOR_BGR2RGB) for p in paths])
 
-    # Save the sequence.
-    np.save(path, sequence)
 
-    pbar.update(1)
+def canvases_to_rgb(canvases):
+    """Mismo preprocesamiento que en el entrenamiento para dibujos en memoria:
+    se pasan por JPEG (como al guardarlos en handtrack.py) y se convierten a RGB (H10)."""
+    out = []
+    for img in canvases:
+        ok, buf = cv2.imencode('.jpg', img)
+        out.append(cv2.cvtColor(cv2.imdecode(buf, cv2.IMREAD_COLOR), cv2.COLOR_BGR2RGB))
+    return np.stack(out)
 
-pbar.close()
+
+def extract_features(model, rgb_frames, batch_size=32):
+    """(n, 299, 299, 3) RGB -> (n, 2048), procesando los fotogramas por lotes (H14)."""
+    from keras.applications.inception_v3 import preprocess_input
+    x = preprocess_input(rgb_frames.astype(np.float32))
+    # model(...) en lugar de model.predict(...): predict dentro de un bucle acumula memoria en TF 2.15
+    return np.concatenate([model(x[i:i + batch_size], training=False).numpy()
+                           for i in range(0, len(x), batch_size)])
+
+
+def main():
+    parser = argparse.ArgumentParser(description='Extrae 2048 características por fotograma con Inception V3.')
+    parser.add_argument('--seq-length', type=int, default=150)
+    parser.add_argument('--class-limit', type=int, default=10)
+    parser.add_argument('--batch-size', type=int, default=32)
+    args = parser.parse_args()
+
+    set_seed(42)
+    data = DataSet(seq_length=args.seq_length, class_limit=args.class_limit)
+    model = build_extractor()
+
+    # Loop through data.
+    for video in tqdm(data.data, desc='Extrayendo características'):
+        # Get the path to the sequence for this video.
+        path = data.sequence_file(video, 'features2048')
+        # Check if we already have it.
+        if os.path.isfile(path):
+            continue
+
+        # Get the frames for this video.
+        frames = data.get_frames_for_sample(video)
+        if len(frames) < data.seq_length:
+            tqdm.write('[aviso] %s tiene %d fotogramas (< %d); se omite.' % (video[2], len(frames), data.seq_length))
+            continue
+
+        # Now downsample to just the ones we need.
+        frames = data.rescale_list(frames, data.seq_length)
+        sequence = extract_features(model, load_frames(frames), args.batch_size)
+
+        # Save the sequence.
+        os.makedirs(os.path.dirname(path), exist_ok=True)
+        np.save(path, sequence.astype(np.float32))
+
+
+if __name__ == '__main__':
+    main()

@@ -1,71 +1,54 @@
-import numpy as np
-import os.path
-from keras.preprocessing import image as Img
-from keras.applications.inception_v3 import InceptionV3, preprocess_input
-from keras.models import Model, load_model
-from keras.layers import Input
+import argparse
 import glob
-import cv2
+import os.path
 
+import numpy as np
+from keras.models import load_model
 
-def rescale_list(input_list, size):
-    assert len(input_list) >= size
-    skip = len(input_list) // size
-    output = [input_list[i] for i in range(0, len(input_list), skip)]
-    return output[:size]
+from extract_features_harp import build_extractor, canvases_to_rgb, extract_features
+from handtrack import process_video
+from lspy_common import load_meta
 
-model = load_model("lstm_senha_model")
-classes =  glob.glob(os.path.join('data','train', '*'))
-classes = [classes[i].split('\\')[2] for i in range(len(classes))]
-classes = sorted(classes)
-print(classes)
+parser = argparse.ArgumentParser(description='Predice la seña de un video con la LSTM entrenada.')
+parser.add_argument('video', help='Ruta del video (por ejemplo ROJO.mp4)')
+parser.add_argument('--model', default='lstm_senha_model')
+parser.add_argument('--top', type=int, default=3, help='Cantidad de señas más probables a mostrar')
+args = parser.parse_args()
 
-image_name = 'soltero_hugo.avi'
-cam = cv2.VideoCapture(image_name) 
-currentframe = 0
-  
-frames=[]
-while(True): 
-    ret,frame = cam.read() 
-    if ret: 
-        # if video is still left continue creating images 
-        name = 'testFinal/frame'+'9' +"frame_no"+ str(currentframe) + '.jpg'
-        cv2.imwrite(name, frame) 
-        print(frame)
-        frames.append(name)  
-        currentframe += 1
-    else: 
-        break
-cam.release() 
-cv2.destroyAllWindows()
-print(frames)
-rescaled_list = rescale_list(frames,40)
+model = load_model(args.model)
+meta = load_meta(args.model)
+if meta is not None:
+    classes = meta['classes']
+    data_type = meta['data_type']
+    seq_length = meta['seq_length']
+else:
+    # Modelos entrenados antes de guardar el .json: se deducen de data/train
+    print('[aviso] No se encontró %s.json; se usan las carpetas de data/train y features2048.' % args.model)
+    classes = sorted(os.path.basename(c) for c in glob.glob(os.path.join('data', 'train', '*')))
+    data_type, seq_length = 'features2048', 150
 
-base_model = InceptionV3(
-    weights='imagenet',
-    include_top=True
-)
-# We'll extract features at the final pool layer.
-inception_model = Model(
-    inputs=base_model.input,
-    outputs=base_model.get_layer('avg_pool').output
-)
-sequence = []
-for image in rescaled_list:
-        img = Img.load_img(image, target_size=(299, 299))
-        x = Img.img_to_array(img)
-        x = np.expand_dims(x, axis=0)
-        x = preprocess_input(x)
-        features = inception_model.predict(x)
-        sequence.append(features[0])
+# Same steps as handtrack.py + extract_features_harp.py (+ retrain_inception.py)
+info = process_video(args.video, seq_length)
+if info['total_frames'] == 0:
+    raise SystemExit('No se pudo leer el video %s' % args.video)
+print('Fotogramas del video: %d; con manos en la secuencia: %d de %d'
+      % (info['total_frames'], info['with_hand'], seq_length))
 
-sequence = np.array([sequence])
-prediction = model.predict(sequence)
-maxm = prediction[0][0]
-maxid = 0
-for i in range(len(prediction[0])):
-      if(maxm<prediction[0][i]):
-            maxm = prediction[0][i]
-            maxid = i
-#print(frames)
-print(image_name,' ------- ',classes[maxid])
+if data_type == 'landmarks':
+    sequence = info['landmarks']
+elif data_type in ('features2048', 'probs'):
+    sequence = extract_features(build_extractor(), canvases_to_rgb(info['canvases']))
+    if data_type == 'probs':
+        head = load_model(os.path.join('data', 'inception_head.keras'))
+        sequence = head.predict(sequence, verbose=0)
+        frame_votes = sequence.argmax(1)
+        print('Seña más probable por fotograma según Inception V3 (reentrenada): %s'
+              % classes[np.bincount(frame_votes, minlength=len(classes)).argmax()])
+else:
+    raise SystemExit("La representación '%s' no se puede reproducir en la predicción." % data_type)
+
+prediction = model.predict(sequence[np.newaxis], verbose=0)[0]
+for i in np.argsort(prediction)[::-1][:args.top]:
+    print('%-12s %.3f' % (classes[i], prediction[i]))
+
+print(args.video, ' ------- ', classes[int(np.argmax(prediction))])
