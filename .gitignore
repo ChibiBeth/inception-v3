@@ -15,3 +15,7 @@ lstm_senha_model/
 *.csv
 *.zip
 
+lstm_*/
+lstm_*.json
+rawdata_aug/
+modelos_semillas/

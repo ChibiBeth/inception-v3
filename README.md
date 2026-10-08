@@ -63,3 +63,20 @@ python evaluate_metrics.py --model lstm_senha_model --raw-dir rawdata_aug --sign
 ```
 
 Full documentation (in Spanish) is in [docs/](docs/README.md).
+
+## Credits and origin of the code
+
+This project was not written from scratch. It started from two MIT-licensed repositories, whose copyright notices are kept in [LICENSE](LICENSE):
+
+- **[hthuwal/sign-language-gesture-recognition](https://github.com/hthuwal/sign-language-gesture-recognition)** (Harish Chandra Thuwal), the code of Masood, Srivastava, Thuwal and Ahmad (2018), *Real-Time Sign Language Gesture (Word) Recognition from Video Sequences Using CNN and RNN*, doi:[10.1007/978-981-10-7566-7_63](https://doi.org/10.1007/978-981-10-7566-7_63). The two per-frame representations compared in the thesis (softmax probabilities of a retrained Inception V3 vs. the 2048 values of its last pooling layer) follow its two approaches. `loadpicklefileanddisplay.py` comes from this repository. Its authors ask to cite the paper if the project is useful.
+- **[harvitronix/five-video-classification-methods](https://github.com/harvitronix/five-video-classification-methods)** (Matt Harvey). The `DataSet` class in `extract_features_harp.py`, the organisation of videos as frame sequences and the `--arch original` LSTM derive from it. The `_harp` suffix comes from *human activity recognition project*, the name of the authors' first adaptation of this code.
+
+Everything else (MediaPipe preprocessing, data augmentation, retrained Inception head, light LSTM, grouped validation, evaluation, multi-seed experiments and the similar-sign analysis) was written for the thesis.
+
+## Data
+
+The original videos are **not** included and are not shared: participants authorised their use for the thesis and derived academic publications only. If a dataset is released, it will contain only preprocessed data (hand-skeleton drawings, MediaPipe coordinates and Inception V3 features) with pseudonymous signer codes (P1–P10).
+
+## Thesis version
+
+The results reported in the thesis correspond to tag `tesis-v1.0` (commit `[COMPLETAR]`).
