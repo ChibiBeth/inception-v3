@@ -13,9 +13,10 @@ from lspy_common import frame_pattern, sequence_file, set_seed
 
 class DataSet():
 
-    def __init__(self, seq_length=150, class_limit=None, image_shape=(299, 299, 3), max_frames=None):
+    def __init__(self, seq_length=150, class_limit=None, image_shape=(299, 299, 3), max_frames=None, classes=None):
         self.seq_length = seq_length
         self.class_limit = class_limit
+        self.only_classes = classes  # subconjunto de señas a usar (None = todas, según class_limit)
         self.sequence_path = os.path.join('data', 'sequences')
         self.max_frames = max_frames  # máximo de fotogramas por video (None = sin límite)
         self.data = self.get_data()
@@ -46,6 +47,11 @@ class DataSet():
             if item[1] not in classes:
                 classes.append(item[1])
         classes = sorted(classes)
+        if self.only_classes:
+            missing = set(self.only_classes) - set(classes)
+            if missing:
+                raise ValueError('Clases inexistentes en data_file.csv: %s' % sorted(missing))
+            return sorted(self.only_classes)
         if self.class_limit is not None:
             return classes[:self.class_limit]
         else:

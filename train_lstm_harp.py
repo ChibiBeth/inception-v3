@@ -27,12 +27,19 @@ parser.add_argument('--val-frac', type=float, default=0.2,
                     help='Fracción de videos originales de train reservada para validación')
 parser.add_argument('--seq-length', type=int, default=150)
 parser.add_argument('--class-limit', type=int, default=10)
-parser.add_argument('--seed', type=int, default=42)
+parser.add_argument('--seed', type=int, default=42, help='Semilla de inicialización y orden de entrenamiento')
+parser.add_argument('--split-seed', type=int, default=42,
+                    help='Semilla de la separación train/validación (fija, para comparar semillas con la misma validación)')
+parser.add_argument('--clases', nargs='+', default=None, help='Entrenar solo con estas señas (por defecto, todas)')
+parser.add_argument('--sin-checkpoints', action='store_true',
+                    help='No guardar checkpoints por época (el modelo final ya tiene los mejores pesos)')
 parser.add_argument('--output', default='lstm_senha_model')
 args = parser.parse_args()
 
 set_seed(args.seed)
 name = 'lstm-%s-%s' % (args.data_type, args.arch)
+if args.output != 'lstm_senha_model':
+    name += '-' + os.path.basename(args.output.rstrip('/'))
 
 checkpointer = ModelCheckpoint(
     filepath=os.path.join('data', 'checkpoints', name + '.{epoch:03d}-{val_loss:.3f}.hdf5'),
@@ -55,14 +62,15 @@ csv_logger = CSVLogger(os.path.join('data', 'logs', name + '-' + 'training-' + \
 # Get the data and process it.
 data = DataSet(
     seq_length=args.seq_length,
-    class_limit=args.class_limit
+    class_limit=args.class_limit,
+    classes=args.clases
 )
 train_rows, test_rows = data.split_train_test()
 
 # Validation comes from train, grouping each original video with its augmented copies,
 # so the test set is used only once, at the end.
 tr_idx, va_idx = grouped_train_val_split([r[2] for r in train_rows], [r[1] for r in train_rows],
-                                         args.val_frac, args.seed)
+                                         args.val_frac, args.split_seed)
 X, y = data.load_rows([train_rows[i] for i in tr_idx], args.data_type)
 X_val, y_val = data.load_rows([train_rows[i] for i in va_idx], args.data_type)
 X_test, y_test = data.load_rows(test_rows, args.data_type)
@@ -96,7 +104,7 @@ model.fit(
     batch_size=args.batch_size,
     validation_data=(X_val, y_val),
     verbose=2,
-    callbacks=[tb, early_stopper, csv_logger, checkpointer],
+    callbacks=[tb, early_stopper, csv_logger] + ([] if args.sin_checkpoints else [checkpointer]),
     epochs=args.epochs)
 
 # The test set is evaluated only once, with the weights chosen on validation.
@@ -112,6 +120,8 @@ save_meta(args.output, {
     'arch': args.arch,
     'lr': args.lr,
     'seed': args.seed,
+    'split_seed': args.split_seed,
+    'log': name,
     'videos_validacion': sorted({train_rows[i][2] for i in va_idx}),
     'exactitud_prueba': acc,
 })

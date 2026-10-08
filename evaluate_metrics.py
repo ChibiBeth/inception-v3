@@ -220,9 +220,11 @@ def read_data_file(data_dir):
              "con_mano": int(r[4]) if len(r) >= 5 and r[4].isdigit() else None} for r in rows]
 
 
-def filter_rows(rows, seq_length, max_frames, class_limit):
+def filter_rows(rows, seq_length, max_frames, class_limit, only=None):
     classes = sorted({r["clase"] for r in rows})
-    if class_limit:
+    if only:
+        classes = sorted(only)
+    elif class_limit:
         classes = classes[:class_limit]
     kept = [r for r in rows if seq_length <= r["nb_frames"] <= max_frames and r["clase"] in classes]
     return kept, classes
@@ -485,7 +487,8 @@ def training_curves(args):
     else:
         # el log del mismo tipo de modelo (train_lstm_harp.py lo nombra lstm-<data_type>-<arch>-training-*)
         meta = None if args.sin_modelo or args.model == "mejor" else load_meta(args.model)
-        pattern = f"lstm-{meta['data_type']}-{meta['arch']}-training-*.log" if meta else "*.log"
+        prefix = meta.get("log", f"lstm-{meta['data_type']}-{meta['arch']}") if meta else None
+        pattern = f"{prefix}-training-*.log" if meta else "*.log"
         files = sorted(glob.glob(os.path.join(args.logs_dir, pattern)), key=os.path.getmtime)
         files = files[-1:] if files else []
     if not files:
@@ -947,6 +950,8 @@ def evaluate_split(args, model, rows, classes, split):
                           round(float(conf[i]), 4), top3, int(is_augmented_row(r["split"], r["stem"]))])
     write_csv(os.path.join(out, f"predicciones_{split}.csv"),
               ["video", "clase_real", "clase_predicha", "acierto", "confianza", "top3", "aumentado"], pred_rows)
+    write_csv(os.path.join(out, f"probabilidades_{split}.csv"), ["video", "clase_real"] + [f"p_{c}" for c in classes],
+              [[r["stem"], classes[y[i]]] + [round(float(v), 6) for v in proba[i]] for i, r in enumerate(used)])
     ci = m.get("exactitud_IC95", [float("nan")] * 2)
     log(f"  Exactitud: {100 * m['exactitud']:.1f} % ({m['aciertos']}/{m['n']})  IC95 [{100 * ci[0]:.1f}; "
         f"{100 * ci[1]:.1f}]  |  azar: {100 * m['azar_1_sobre_K']:.1f} %  |  p = {m['p_valor_binomial_vs_azar']:.4g}")
@@ -1069,7 +1074,7 @@ def cross_validation(args, rows, classes, signers):
         "quedan siempre en el mismo pliegue (sin fuga).")
     skf = StratifiedGroupKFold(n_splits=k, shuffle=True, random_state=args.seed)
     K = len(classes)
-    folds, cm_total = [], np.zeros((K, K), dtype=int)
+    folds, cm_total, oof_rows = [], np.zeros((K, K), dtype=int), []
     for f, (tr, va) in enumerate(skf.split(X, y, groups)):
         # Evaluar solo sobre originales del pliegue de validación (las copias no son datos nuevos)
         va_orig = np.array([i for i in va if not is_augmented_row(used[i]["split"], used[i]["stem"])]) \
@@ -1079,13 +1084,19 @@ def cross_validation(args, rows, classes, signers):
         tf.keras.backend.clear_session()
         model = build_model(X.shape[1:], K, args.cv_arch, args.cv_lr)
         model.fit(X[tr], np.eye(K)[y[tr]], epochs=args.cv_epochs, batch_size=32, verbose=0, shuffle=True)
-        pr = predict_proba(model, X[va_orig]).argmax(1)
+        proba_va = predict_proba(model, X[va_orig])
+        pr = proba_va.argmax(1)
+        for i, p in zip(va_orig, proba_va):
+            oof_rows.append([f + 1, used[i]["split"], used[i]["stem"], groups[i], classes[y[i]]]
+                            + [round(float(v), 6) for v in p])
         acc = float((pr == y[va_orig]).mean())
         f1 = float(f1_score(y[va_orig], pr, labels=list(range(K)), average="macro", zero_division=0))
         cm_total += confusion_matrix(y[va_orig], pr, labels=list(range(K)))
         folds.append({"pliegue": f + 1, "n_train": int(len(tr)), "n_val": int(len(va_orig)),
                       "exactitud": acc, "f1_macro": f1})
         log(f"  Pliegue {f + 1}/{k}: exactitud {100 * acc:.1f} %  F1 macro {f1:.3f}  (n_val={len(va_orig)})")
+    write_csv(os.path.join(args.out_dir, "probabilidades_validacion_cruzada.csv"),
+              ["pliegue", "particion", "video", "grupo", "clase_real"] + [f"p_{c}" for c in classes], oof_rows)
     accs = np.array([d["exactitud"] for d in folds])
     f1s = np.array([d["f1_macro"] for d in folds])
     res = {"k": k, "agrupado_por": gname, "arquitectura": args.cv_arch, "epocas": args.cv_epochs,
@@ -1196,6 +1207,8 @@ def parse_args():
     p.add_argument("--seq-length", type=int, default=150)
     p.add_argument("--max-frames", type=int, default=150)
     p.add_argument("--class-limit", type=int, default=10)
+    p.add_argument("--clases", nargs="+", default=None,
+                   help="Subconjunto de señas (por defecto, las del .json del modelo o todas)")
     p.add_argument("--data-type", default=None,
                    help="features2048 | probs | landmarks | features (versión anterior). "
                         "Por defecto, la del .json del modelo o features2048")
@@ -1253,7 +1266,10 @@ def main():
         log(f"Representación de entrada: {args.data_type}")
 
     all_rows = read_data_file(args.data_dir)
-    rows, classes = filter_rows(all_rows, args.seq_length, args.max_frames, args.class_limit)
+    if args.clases is None and not args.sin_modelo and args.model != "mejor":
+        meta = load_meta(args.model)
+        args.clases = meta.get("classes") if meta else None
+    rows, classes = filter_rows(all_rows, args.seq_length, args.max_frames, args.class_limit, args.clases)
     if len(rows) < len(all_rows):
         log(f"[aviso] {len(all_rows) - len(rows)} filas de data_file.csv quedan fuera por el filtro "
             f"(seq_length/max_frames/class_limit), igual que en DataSet.")
