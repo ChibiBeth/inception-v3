@@ -79,4 +79,4 @@ The original videos are **not** included and are not shared: participants author
 
 ## Thesis version
 
-The results reported in the thesis correspond to tag `tesis-v1.0` (commit `[COMPLETAR]`).
+The results reported in the thesis correspond to tag `tesis-v1.0` (commit `6f1e1401debd2485420a6d900e170b896473e96a`).
