@@ -165,120 +165,110 @@ El script se probó con un conjunto sintético que reproduce la estructura de `d
 
 Actualización (6 de octubre de 2026): con el código corregido se ejecutó el pipeline completo (aumento, `handtrack.py`, extracción, `retrain_inception.py`, las tres representaciones, ambas arquitecturas, `predict_harp.py` y `evaluate_metrics.py` con `--cv`) sobre un subconjunto de 3 clases y 30 fotogramas por video, con TensorFlow 2.15 real. Todas las etapas funcionan; esa prueba no produce cifras útiles para la tesis.
 
-## 6.8 Resultados de la regeneración completa (7 de octubre de 2026)
+## 6.8 Resultados con el conjunto equilibrado (8 de octubre de 2026)
 
-Datos: `rawdata/` (80 originales en train + 320 copias con rotación, zoom, eliminación de fotogramas y espejo; 20 originales en test), 150 fotogramas por video, semilla 42. Las métricas completas de cada modelo están en `metricas/<modelo>/` y los registros de cada etapa en `data/logs_pipeline/`.
+Datos: `rawdata/` equilibrado (10 personas × 10 señas; 8 personas en train y 2 en test). En train hay 80 originales y 320 copias aumentadas (rotación, zoom, eliminación de fotogramas y espejo). Se usan 150 fotogramas por video. Todo se generó desde cero con `./pipeline_completo.sh`.
 
-### Prueba (20 videos, casi independiente del signante)
+- Métricas completas de cada modelo: `metricas/<modelo>/`.
+- Registros de cada etapa: `data/logs_pipeline/`.
+- Resultados del conjunto del 7 de octubre (con `marzo_cr1_2` y sin `martes_cr5`): respaldados en `../respaldo_dataset_v2_2026-10-07/`.
+
+### Prueba, semilla 42 (20 videos de 2 personas que no aparecen en train)
 
 | Modelo (`--output`) | Representación | Arquitectura | Parámetros | Exactitud (aciertos) | IC95 | F1 macro | κ | p vs. azar |
 |---|---|---|---:|---|---|---:|---:|---:|
-| `lstm_senha_model` | `features2048` | ligera | 1 168 842 | 40 % (8/20) | 20 – 60 % | 0,29 | 0,33 | 0,0004 |
-| `lstm_probs` | `probs` (Inception reentrenada) | ligera | 125 386 | 40 % (8/20) | 20 – 60 % | 0,34 | 0,33 | 0,0004 |
-| `lstm_landmarks` | `landmarks` (MediaPipe) | ligera | 184 778 | 45 % (9/20) | 25 – 65 % | 0,41 | 0,39 | 0,00006 |
-| `lstm_original` | `features2048` | original | 35 597 578 | 35 % (7/20) | 15 – 55 % | 0,21 | 0,28 | 0,002 |
-| — (sin LSTM) | Inception V3 reentrenada, promedio por video | — | 20 490 | 35 % (7/20) | — | — | — | — |
+| `lstm_senha_model` | `features2048` | ligera | 1 168 842 | 35 % (7/20) | 15 – 55 % | 0,30 | 0,28 | 0,002 |
+| `lstm_probs` | `probs` (Inception reentrenada) | ligera | 125 386 | 35 % (7/20) | 15 – 55 % | 0,29 | 0,28 | 0,002 |
+| `lstm_landmarks` | `landmarks` (MediaPipe) | ligera | 184 778 | 50 % (10/20) | 30 – 70 % | 0,40 | 0,44 | 0,000007 |
+| `lstm_original` | `features2048` | original | 35 597 578 | 45 % (9/20) | 25 – 70 % | 0,39 | 0,39 | 0,00006 |
+| — (sin LSTM) | Inception V3 reentrenada, promedio por video | — | 20 490 | 40 % (8/20) | — | — | — | — |
 
-Azar: 10 %. La versión anterior del código obtenía entre 18 % y 30 % (capítulo 6 de la tesis), con la prueba usada además como validación.
+Azar: 10 %. Con una sola semilla y 20 videos estas cifras son muy inestables: ver 6.9 para la media entre 5 semillas, que es lo que conviene informar.
 
-### Validación cruzada de 5 pliegues agrupada por persona
-
-Los 100 originales (train + test) y sus copias; cada persona queda entera en un pliegue y se evalúa solo sobre originales. 60 épocas (`features2048`) o 100 (`landmarks`), arquitectura ligera, sin parada temprana.
-
-| Representación | Exactitud media ± desvío | F1 macro | Pliegues |
-|---|---|---|---|
-| `features2048` | **53,5 % ± 6,2** | 0,48 ± 0,10 | 50,0 · 45,5 · 62,1 · 55,0 · 55,0 % |
-| `landmarks` | 44,5 % ± 8,1 | 0,38 ± 0,08 | 35,0 · 54,5 · 37,9 · 50,0 · 45,0 % |
-
-Comandos: `python evaluate_metrics.py --sin-modelo --data-type <tipo> --signers-csv personas_video.csv --cv 5 --cv-epochs <60|100> --cv-arch ligera --cv-por-persona --cv-incluir-test --cv-solo-originales` (salida en `metricas/cv_personas_<tipo>/`).
-
-### Lectura
-
-1. **Las correcciones mejoran el resultado** respecto de la versión anterior, y ahora con una evaluación más exigente: prueba con personas nuevas y validación separada.
-2. **Con 20 videos de prueba no se pueden ordenar las variantes:** los intervalos se superponen por completo y la diferencia entre 35 %, 40 % y 45 % es de uno o dos videos. La validación cruzada por persona (100 videos) es la estimación más estable. Allí las características de Inception V3 superan a las coordenadas (53,5 % frente a 44,5 %), aunque el desvío entre pliegues es grande.
-3. **La arquitectura liviana rinde igual o mejor que la original** con 30 veces menos parámetros (H6).
-4. **Inception V3 reentrenada sola** (sin LSTM, promediando probabilidades por fotograma) acierta 35 % en prueba y 24 % en validación. La LSTM aporta al modelar el orden temporal. Las probabilidades reentrenadas (10 valores) rinden igual que las 2048 características en prueba, con un modelo 9 veces más chico.
-5. Las confusiones más frecuentes son entre señas parecidas en el movimiento de la mano (agosto, rojo y sábado → marzo; broma → jugar; miércoles → soltero). Ver `metricas/<modelo>/resumen.md`.
-6. En todos los modelos la exactitud sobre train (60 % – 73 %) supera ampliamente a la de prueba: sigue habiendo sobreajuste, esperable con 80 grabaciones de entrenamiento.
-
-## 6.9 Estabilidad entre semillas y señas parecidas (7 de octubre de 2026)
+## 6.9 Estabilidad entre semillas y señas parecidas (8 de octubre de 2026)
 
 Sugerencia del tutor: repetir el entrenamiento con varias semillas e informar media ± desvío estándar. Se usaron las semillas 42, 43, 44, 45 y 46.
 
 **Cómo reproducirlo:**
 
 ```bash
-./experimentos_semillas.sh        # ~9 h sin GPU; se puede interrumpir y relanzar (salta lo ya hecho)
+./pipeline_completo.sh            # desde los videos; incluye experimentos_semillas.sh y analisis_semillas.py (~12 h sin GPU)
+./experimentos_semillas.sh        # solo la batería de semillas (requiere los datos ya generados)
 python analisis_semillas.py       # tablas, figuras y resumen en metricas/analisis_semillas/
 ```
 
-- En los modelos evaluados sobre la prueba, la semilla cambia la inicialización de los pesos y el orden de los lotes. La separación train/validación es la misma en todas (`--split-seed 42`), así que la variación se debe solo al entrenamiento.
-- En la validación cruzada por persona, la semilla cambia además qué personas caen en cada pliegue (validación cruzada repetida).
+- En los modelos evaluados sobre la prueba, la semilla cambia la inicialización de los pesos y el orden de los lotes. La separación train/validación es la misma en todas (`--split-seed 42`).
+- En la validación cruzada por persona (10 personas, 5 pliegues de 2 personas, todos de 20 videos), la semilla cambia además qué personas caen en cada pliegue.
 - La capa reentrenada de Inception V3 (`probs`) es la misma en todas las semillas (semilla 42).
 - Cada caso tiene sus métricas completas en `metricas/semillas/<experimento>/s<semilla>/` y `metricas/semillas_cv/<experimento>/s<semilla>/`.
+- Resumen completo en `metricas/analisis_semillas/resumen_semillas.md`.
 
 ### Resultados: 10 señas
 
 | Modelo | Prueba (20 videos) | Aciertos (mín. – máx.) | Validación cruzada por persona (100 videos) |
 |---|---|---|---|
-| Inception V3 (2048), LSTM ligera | 44,0 % ± 9,6 | 7 – 12 | **53,0 % ± 1,6** |
-| Inception V3 (2048), LSTM original | 40,0 % ± 5,0 | 7 – 9 | — |
-| Coordenadas de MediaPipe, LSTM ligera | 47,0 % ± 7,6 | 7 – 11 | 45,6 % ± 4,6 |
-| Inception V3 reentrenada (probabilidades), LSTM ligera | 38,0 % ± 5,7 | 6 – 9 | — |
+| Inception V3 (2048), LSTM ligera | 42,0 % ± 10,4 | 6 – 11 | **54,0 % ± 2,8** |
+| Inception V3 (2048), LSTM original | 43,0 % ± 7,6 | 7 – 11 | — |
+| Coordenadas de MediaPipe, LSTM ligera | **52,0 % ± 2,7** | 10 – 11 | 49,2 % ± 2,5 |
+| Inception V3 reentrenada (probabilidades), LSTM ligera | 39,0 % ± 6,5 | 6 – 9 | — |
 
-Media ± desvío estándar entre las 5 semillas; azar: 10 %. Tablas: `tabla_semillas_test.tex`, `tabla_semillas_cv.tex`; figuras: `semillas_exactitud_test.pdf`, `semillas_exactitud_cv.pdf`.
+Media ± desvío estándar entre las 5 semillas; azar: 10 %. Las dos evaluaciones son independientes del signante. Tablas: `tabla_semillas_test.tex`, `tabla_semillas_cv.tex`; figuras: `semillas_exactitud_test.pdf`, `semillas_exactitud_cv.pdf`.
 
 **Lectura:**
 
-1. **La semilla sola mueve la exactitud en prueba hasta 25 puntos:** el modelo principal va de 35 % a 60 % según la semilla. Un único entrenamiento con semilla 42 (40 %) no basta para caracterizar el modelo, como señaló el tutor.
-2. En la prueba, las diferencias entre representaciones (38 % – 47 %) son menores que el desvío de cada una: **con 20 videos no se pueden ordenar**.
-3. **La validación cruzada por persona es mucho más estable** (desvío de 1,6 puntos entre semillas para Inception V3) y sí separa las representaciones: las características de Inception V3 (53,0 %) superan a las coordenadas de MediaPipe (45,6 %). Es la cifra recomendada para el resultado principal, junto con la de prueba como evaluación independiente.
-4. Dentro de cada validación cruzada, el desvío entre pliegues (≈ 10 – 12 puntos) es mayor que entre semillas: el rendimiento depende bastante de **qué personas** quedan fuera.
-5. La arquitectura original (35,6 M parámetros) no supera a la ligera (1,2 M).
+1. **La semilla sola mueve la exactitud en prueba hasta 25 puntos.** Con Inception V3 (2048) y LSTM ligera va de 30 % a 55 % según la semilla, así que un único entrenamiento no caracteriza el modelo, como señaló el tutor.
+2. **En la prueba**, las coordenadas de MediaPipe son las más estables (52 % ± 2,7) y las de mejor media. Aun así, sobre 20 videos de solo 2 personas la diferencia con Inception (42 % ± 10,4) es de dos aciertos en promedio.
+3. **En la validación cruzada por persona** (10 personas, 100 videos), el orden se invierte: Inception V3 (54,0 % ± 2,8) supera a las coordenadas (49,2 % ± 2,5). Es la estimación más confiable, porque promedia sobre las 10 personas en lugar de 2. Que el orden cambie entre ambas evaluaciones indica que **la diferencia entre representaciones es pequeña y depende de qué personas se evalúan**. En la tesis conviene presentarlas como de rendimiento comparable, con una ligera ventaja de Inception V3 en la evaluación más amplia.
+4. Dentro de cada validación cruzada, el desvío entre pliegues (≈ 8 puntos) es mayor que entre semillas: el rendimiento depende de qué personas quedan fuera.
+5. La arquitectura original (35,6 M parámetros) rinde igual que la ligera (1,2 M) en media (43 % frente a 42 %), con 30 veces más parámetros y 15 veces más tiempo de entrenamiento.
 6. Las probabilidades de la capa reentrenada (10 valores por fotograma) rinden algo menos que las 2048 características: comprimir a 10 números pierde información útil para la LSTM.
+7. En train la exactitud llega a 54 % – 83 % según el modelo, muy por encima de la prueba: hay sobreajuste, esperable con 8 personas de entrenamiento.
 
 ### Señas parecidas
 
 Pares indicados como parecidos: (marzo, rojo), (sábado, agosto), (jugar, broma), (nombre, martes), (miércoles, soltero). Tablas: `tabla_parecidas_test.tex`, `tabla_parecidas_cv.tex`, `tabla_no_parecidas_*.tex`; matrices de confusión ordenadas por par: `confusion_pares_*.pdf`.
 
-Validación cruzada por persona, Inception V3 (2048), media de 5 semillas:
+Validación cruzada por persona, media de 5 semillas:
 
-| Medida | Resultado | Azar |
-|---|---|---|
-| Exactitud con 10 señas | 52,4 % ± 3,1 | 10 % |
-| Exactitud a nivel de par (se acepta confundir una seña con su pareja) | 79,2 % ± 4,4 | 20 % |
-| Errores que son confusiones dentro del par | 56,6 % ± 7,1 | — |
-| Distinguir las dos señas de un par | 64,1 % ± 2,7 | 50 % |
-| Señas no parecidas: 5 señas, una de cada par, modelo de 10 señas (32 combinaciones) | 77,8 % ± 2,9 | 20 % |
-| Señas no parecidas: modelo **entrenado** solo con el grupo A (marzo, sábado, jugar, nombre, miércoles) | 79,2 % ± 5,4 | 20 % |
-| Señas no parecidas: modelo **entrenado** solo con el grupo B (rojo, agosto, broma, martes, soltero) | 76,6 % ± 2,8 | 20 % |
+| Medida | Inception V3 (2048) | Coordenadas de MediaPipe | Azar |
+|---|---|---|---|
+| Exactitud con 10 señas | 54,0 % ± 2,8 | 49,2 % ± 2,5 | 10 % |
+| Exactitud a nivel de par (se acepta confundir una seña con su pareja) | 80,2 % ± 2,9 | 65,2 % ± 3,4 | 20 % |
+| Errores que son confusiones dentro del par | 57,1 % ± 4,4 | 31,6 % ± 4,3 | — |
+| Distinguir las dos señas de un par | 64,8 % ± 2,5 | 69,4 % ± 1,9 | 50 % |
+| Señas no parecidas: 5 señas, una de cada par, modelo de 10 señas (32 combinaciones) | 79,3 % ± 2,3 | 66,1 % ± 3,4 | 20 % |
+| Señas no parecidas: modelo **entrenado** solo con el grupo A (marzo, sábado, jugar, nombre, miércoles) | 78,8 % ± 4,8 | — | 20 % |
+| Señas no parecidas: modelo **entrenado** solo con el grupo B (rojo, agosto, broma, martes, soltero) | 79,6 % ± 4,3 | — | 20 % |
 
-En la prueba (20 videos) el patrón es el mismo: 44 % con 10 señas, 78 % a nivel de par, 74 % – 80 % con los modelos entrenados solo con señas no parecidas.
-
-La exactitud con 10 señas de esta tabla (52,4 %) se calcula sobre todas las predicciones juntas; la de la tabla anterior (53,0 %) es el promedio de los pliegues, que tienen tamaños distintos.
+En la prueba (20 videos), con Inception V3 (2048) y LSTM ligera, el patrón es el mismo:
+- 42 % con 10 señas y 81 % a nivel de par.
+- Dos tercios de los errores, dentro del par.
+- 76 % entre señas no parecidas.
+- Los modelos entrenados solo con señas no parecidas dan 64 % ± 11 en el grupo A y 90 % ± 0 en el B, con solo 10 videos por grupo.
 
 Capacidad de distinguir las dos señas de cada par (validación cruzada, media de 5 semillas):
 
 | Par | Inception V3 (2048) | Coordenadas de MediaPipe |
 |---|---:|---:|
-| marzo – rojo | 57 % | 52 % |
-| sábado – agosto | 60 % | 66 % |
-| jugar – broma | 63 % | 56 % |
-| nombre – martes | **87 %** | **97 %** |
-| miércoles – soltero | 53 % | 57 % |
+| marzo – rojo | 53 % | 54 % |
+| sábado – agosto | 67 % | 70 % |
+| jugar – broma | 56 % | 58 % |
+| nombre – martes | **92 %** | **98 %** |
+| miércoles – soltero | 56 % | 67 % |
 
 **Lectura:**
 
-1. **La mayor parte del error viene de las señas parecidas.** Cuando las señas no se parecen, el sistema acierta alrededor del 78 % con 5 clases, el triple de lo esperable por azar. Con las 10 señas baja a ≈ 53 % porque más de la mitad de los errores son confusiones con la pareja.
-2. **Entrenar solo con señas no parecidas no mejora respecto de usar el modelo de 10 señas restringido a esas 5** (grupo A: 79 % entrenado solo con esas señas frente a 80 % con el modelo de 10 señas restringido; grupo B: 77 % en ambos casos). La dificultad está en la similitud de los pares, no en la cantidad de clases.
+1. **Con Inception V3, la mayor parte del error viene de las señas parecidas.** Entre señas no parecidas el sistema acierta ≈ 79 % con 5 clases, cuatro veces lo esperable por azar. Con las 10 señas baja a 54 % porque el 57 % de los errores son confusiones con la pareja. Si se acepta como correcta la confusión dentro del par, la exactitud sube a 80 %.
+2. **Entrenar solo con señas no parecidas no mejora respecto de usar el modelo de 10 señas restringido a esas 5.** En el grupo A da 79 % entrenando solo con esas señas y 81 % con el modelo restringido; en el grupo B, 80 % y 78 %. La dificultad está en la similitud de los pares, no en la cantidad de clases.
 3. **No todos los pares son igual de difíciles:**
-   - **miércoles – soltero, marzo – rojo y jugar – broma** son prácticamente indistinguibles (53 % – 63 %, cerca del azar de 50 %).
-   - **nombre – martes** se distingue bien (87 % – 97 %): para el sistema no es un par confuso.
-4. **marzo, rojo, sábado y agosto forman un grupo de cuatro señas que se confunden entre sí**, no dos pares separados. Sábado y agosto se confunden entre sí (24 % y 18 %), pero también con marzo: agosto se predice como marzo el 30 % de las veces y sábado el 24 % (ver `confusion_pares_cv_cv_features2048.pdf`). Por eso la exactitud “a nivel de par” subestima la dificultad de este grupo.
-5. Las coordenadas de MediaPipe separan mejor nombre – martes y sábado – agosto, y peor marzo – rojo y jugar – broma. Sugiere que esas diferencias dependen de la forma o la orientación de la mano, que cada representación capta de manera distinta.
+   - **marzo – rojo, jugar – broma y miércoles – soltero** son casi indistinguibles (53 % – 67 %, frente a un azar de 50 %).
+   - **sábado – agosto** se distingue algo mejor (67 % – 70 %).
+   - **nombre – martes** se distingue muy bien (92 % – 98 %): para el sistema no es un par confuso.
+4. **marzo, rojo, sábado y agosto forman un grupo de cuatro señas que se confunden entre sí**, no dos pares separados. Con Inception V3, marzo se predice como sábado el 24 % de las veces, sábado como marzo el 28 % y agosto como marzo el 22 % (`confusion_pares_cv_cv_features2048.pdf`). Por eso la exactitud “a nivel de par” subestima la dificultad de este grupo.
+5. **Las coordenadas de MediaPipe se equivocan de otra manera.** Solo el 32 % de sus errores cae dentro del par, frente al 57 % de Inception V3, y distinguen mejor dentro de cada par (69 %). En cambio, confunden más señas no emparejadas: marzo casi nunca se reconoce (8 %) y se reparte entre rojo, sábado y nombre; nombre atrae errores de marzo, rojo y agosto (`confusion_pares_cv_cv_landmarks.pdf`). Las dos representaciones fallan en señas distintas, lo que sugiere que combinarlas podría mejorar el resultado. Es un trabajo futuro posible.
 
 **Texto sugerido para la tesis:**
 
-> Para evaluar la estabilidad del entrenamiento, cada configuración se entrenó con cinco semillas distintas (42 a 46) y se informa la media y el desvío estándar. En el conjunto de prueba, el modelo con características de Inception V3 alcanzó una exactitud de 44,0 % ± 9,6 % (entre 35 % y 60 % según la semilla), lo que muestra que, con 20 videos de prueba, un único entrenamiento no es representativo. La validación cruzada de cinco pliegues agrupada por persona, repetida con las mismas cinco semillas, resultó mucho más estable: 53,0 % ± 1,6 %.
+> Para evaluar la estabilidad del entrenamiento, cada configuración se entrenó con cinco semillas distintas (42 a 46) y se informa la media y el desvío estándar. En el conjunto de prueba, formado por dos personas que no participaron del entrenamiento, el modelo con características de Inception V3 obtuvo una exactitud de 42,0 % ± 10,4 % (entre 30 % y 55 % según la semilla), lo que muestra que, con 20 videos de prueba, un único entrenamiento no es representativo. La validación cruzada de cinco pliegues agrupada por persona, que evalúa a cada una de las diez personas sin haberla visto durante el entrenamiento, resultó mucho más estable: 54,0 % ± 2,8 % con características de Inception V3 y 49,2 % ± 2,5 % con las coordenadas de MediaPipe.
 >
-> El análisis de errores muestra que la mayor parte de ellos se concentra en pares de señas de movimiento similar. Si se acepta como correcta la confusión entre las señas de un mismo par, la exactitud asciende a 79,2 % ± 4,4 %; entre cinco señas no parecidas entre sí, el sistema alcanza 77,8 % ± 2,9 %, frente a un 20 % esperable por azar. Los pares miércoles–soltero, marzo–rojo y jugar–broma resultaron prácticamente indistinguibles para el modelo, mientras que nombre–martes se distinguió en el 87 % de los casos.
+> El análisis de errores muestra que la mayor parte de ellos se concentra en pares de señas de movimiento similar. Con Inception V3, si se acepta como correcta la confusión entre las señas de un mismo par, la exactitud asciende a 80,2 % ± 2,9 %. Entre cinco señas no parecidas entre sí, el sistema alcanza 79,3 % ± 2,3 %, frente a un 20 % esperable por azar, y entrenar un modelo solo con esas señas no mejora este resultado. Los pares marzo–rojo, jugar–broma y miércoles–soltero resultaron prácticamente indistinguibles, mientras que nombre–martes se distinguió en más del 90 % de los casos.

@@ -18,9 +18,9 @@ Documentación del código de la tesis (repositorio `inception-v3`, rama `todo_v
 
 **El sistema.** Cada video pasa por MediaPipe Hands, que dibuja el esqueleto de las manos en blanco sobre negro (299 × 299) y guarda sus coordenadas. Cada video se remuestrea a 150 fotogramas equiespaciados, Inception V3 (ImageNet, con su última capa reentrenada opcionalmente) convierte cada dibujo en un vector y una LSTM clasifica la secuencia en una de 10 señas.
 
-**Los datos.** 100 grabaciones reales de 10 personas (`rawdata/`, `personas_video.csv`): 80 en train (7 a 9 por seña, cada una con 4 copias aumentadas: 400 secuencias) y 20 en test (2 por seña, sin copias). La división se hizo antes del aumento. Las personas de test casi no aparecen en train: la prueba mide la generalización a personas nuevas.
+**Los datos.** 100 grabaciones reales de 10 personas, equilibradas: cada persona signa cada una de las 10 señas una vez (`rawdata/`, `personas_video.csv`). En train hay 8 personas (80 originales, cada uno con 4 copias aumentadas: 400 secuencias) y en test las otras 2 (20 videos, sin copias). La prueba mide la generalización a personas nuevas.
 
-**Resultados (7 de octubre de 2026).** 40 % – 45 % de exactitud en prueba según la representación (azar: 10 %; versión anterior: 18 % – 30 %) y 53,5 % ± 6,2 en validación cruzada por persona. Detalle en [06 · 6.8](06_metricas_para_la_tesis.md#68-resultados-de-la-regeneración-completa-7-de-octubre-de-2026).
+**Resultados (8 de octubre de 2026, 5 semillas).** En prueba: 42,0 % ± 10,4 con Inception V3 y 52,0 % ± 2,7 con coordenadas de MediaPipe (azar: 10 %; versión original del código: 18 % – 30 %). En validación cruzada por persona: 54,0 % ± 2,8 y 49,2 % ± 2,5. Entre señas no parecidas, ≈ 79 % con 5 clases. Detalle en [06 · 6.8 y 6.9](06_metricas_para_la_tesis.md#68-resultados-con-el-conjunto-equilibrado-8-de-octubre-de-2026).
 
 **Hallazgos de la revisión y estado** (detalle en [05](05_hallazgos_y_recomendaciones.md#estado-de-aplicación-6-de-octubre-de-2026)):
 
