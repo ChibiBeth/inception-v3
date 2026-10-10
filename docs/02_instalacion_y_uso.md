@@ -151,6 +151,14 @@ python evaluate_metrics.py --model lstm_senha_model --raw-dir rawdata_aug --sign
 
 La representación (`--data-type`) se toma del `.json` del modelo. Detalles en [06 · Métricas](06_metricas_para_la_tesis.md).
 
+### Todo junto
+
+```bash
+./pipeline_completo.sh     # pasos 1 a 7 y la batería de semillas, desde rawdata/ (~12 h sin GPU)
+```
+
+Salta las etapas ya hechas (`rawdata_aug/`, `data/data_file.csv`, `data/inception_head.keras`, modelos y métricas existentes). Para empezar de cero, mover o borrar esas carpetas antes.
+
 ### Paso 8 — Repetición con varias semillas y análisis de señas parecidas (opcional)
 
 ```bash
@@ -161,7 +169,7 @@ python analisis_semillas.py         # media ± desvío entre semillas y análisi
 - Entrena las variantes con cada semilla (modelos en `modelos_semillas/`, sin checkpoints por época), repite la validación cruzada por persona y entrena modelos solo con señas no parecidas.
 - Tarda unas 9 horas sin GPU, la mayor parte en la arquitectura `original`. Si se interrumpe, al volver a ejecutarlo salta lo que ya terminó.
 - Los pares de señas parecidas se definen en `PARES`, al comienzo de `analisis_semillas.py`.
-- Resultados e interpretación en [06 · 6.9](06_metricas_para_la_tesis.md#69-estabilidad-entre-semillas-y-señas-parecidas-7-de-octubre-de-2026).
+- Resultados e interpretación en [06 · 6.9](06_metricas_para_la_tesis.md#69-estabilidad-entre-semillas-y-señas-parecidas-8-de-octubre-de-2026).
 
 ## 2.5 Utilidad suelta
 
